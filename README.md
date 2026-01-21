@@ -6,6 +6,8 @@
 ```
 python -m ui.local_gui
 ```
+* 實際執行效果
+![Gomoku Local Demo](/figures/local_gui_demo.gif)
 # Codes
 ```text
 gomoku/

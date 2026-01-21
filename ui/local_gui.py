@@ -31,7 +31,7 @@ BOARD_PIXEL = CELL_SIZE * (BOARD_SIZE - 1)
 BOARD_ORIGIN_X = 0
 BOARD_ORIGIN_Y = TOP_BAR + MARGIN
 
-screen = pygame.display.set_mode((WINDOW_W, WINDOW_H), pygame.RESIZABLE)
+screen = pygame.display.set_mode((WINDOW_W, WINDOW_H), pygame.RESIZABLE | pygame.SWSURFACE)
 pygame.display.set_caption("Gomoku")
 
 clock = pygame.time.Clock()
@@ -236,8 +236,8 @@ def main():
 			if event.type == pygame.VIDEORESIZE:
 				# handle window resize
 				update_layout(event.w, event.h)
-				screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
-
+				screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE | pygame.SWSURFACE)
+				
 			if mode == 'menu':
 				if event.type == pygame.MOUSEBUTTONDOWN:
 					mx, my = event.pos
