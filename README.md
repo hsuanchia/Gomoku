@@ -12,15 +12,17 @@ python -m ui.local_gui
 ```text
 gomoku/
 ├── core/
-│   └── board.py        # Game board definition
-│   └── game.py         # Game logic
-│   └── rule.py         # Win or lose
+│   └── board.py                # Game board definition
+│   └── game.py                 # Game logic
+│   └── rule.py                 # Win or lose
 │
 ├── players/
-|   └── random.py       # A program that play with random strategy
+|   └── random.py               # A program that play with random strategy
+|   └── alpha_beta.py           # A program that play with alpha-beta strategy
+|   └── alpha_beta_plus.py      # A program that play with min-max + alpha-beta strategy
 │
 ├── ui/
-│   └── local_gui.py    # Pygame local gui
+│   └── local_gui.py            # Pygame local gui
 |
 └── README.md
 ```
