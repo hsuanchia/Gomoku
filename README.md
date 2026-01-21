@@ -11,11 +11,16 @@ python -m ui.local_gui
 # Codes
 ```text
 gomoku/
+├── core/
+│   └── board.py        # Game board definition
+│   └── game.py         # Game logic
+│   └── rule.py         # Win or lose
+│
 ├── players/
-|   └── random.py       # 一個隨機下棋的程式
+|   └── random.py       # A program that paly with random strategy
 │
 ├── ui/
-│   └── local_gui.py    # Pygame 本地端介面
+│   └── local_gui.py    # Pygame local gui
 |
 └── README.md
 ```
