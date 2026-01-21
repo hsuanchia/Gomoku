@@ -1,13 +1,16 @@
 import os
 import sys
 import pygame
-from players import random as random_ai
-from core.game import Game
 
 # If running the script directly, add project root to sys.path so sibling
 # packages (like `players`) can be imported.
 if __name__ == '__main__' and __package__ is None:
 	sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from players import random as random_ai
+from players import alpha_beta as alpha_beta_ai
+from players import alpha_beta_plus as alpha_beta_plus_ai
+from core.game import Game
 
 # -----------------
 # Global constants / variables
@@ -48,13 +51,16 @@ human_player = 1  # 1=black, 2=white
 AI_PLAYER = 2
 
 
-# menu step for multi-stage menu: 'choose_mode' -> 'choose_color'
+# menu step for multi-stage menu: 'choose_mode' -> 'choose_ai' (if AI) -> 'choose_color'
 menu_step = 'choose_mode'
 # whether the selected match mode uses AI opponent
 vs_ai = False
+# which AI to use: 'random' or 'alpha_beta' (only relevant if vs_ai is True)
+ai_type = 'random'
 
 # UI transient state
 hover_cell = None
+ai_thinking = False  # flag to indicate AI is thinking
 
 
 # Choose a font that supports CJK characters on Windows fallback list
@@ -175,7 +181,7 @@ def reset_board(starting_player=1):
 
 
 def start_game(as_player):
-	global human_player, AI_PLAYER, vs_ai, menu_step
+	global human_player, AI_PLAYER, vs_ai, menu_step, ai_type
 	human_player = as_player
 	if vs_ai:
 		AI_PLAYER = 3 - human_player
@@ -200,7 +206,15 @@ def draw_menu():
 		btn_hvh.draw(screen)
 		btn_hvai.draw(screen)
 		return btn_hvh, btn_hvai
-	else:
+	elif menu_step == 'choose_ai':
+		btn_random = Button((bx, by, b_w, b_h), 'Random AI')
+		btn_alphabeta = Button((bx, by + 96, b_w, b_h), 'Alpha-Beta AI')
+		btn_alphabeta_plus = Button((bx, by + 192, b_w, b_h), 'Alpha-Beta+ AI')
+		btn_random.draw(screen)
+		btn_alphabeta.draw(screen)
+		btn_alphabeta_plus.draw(screen)
+		return btn_random, btn_alphabeta, btn_alphabeta_plus
+	else:  # choose_color
 		btn_black = Button((bx, by, b_w, b_h), 'Play as Black (先手)')
 		btn_white = Button((bx, by + 96, b_w, b_h), 'Play as White (後手)')
 		btn_black.draw(screen)
@@ -247,6 +261,28 @@ def draw_game_over():
 	return btn
 
 
+def draw_ai_thinking():
+	# Display "AI Thinking..." at the top of the screen
+	if ai_thinking:
+		# Create a subtle background box
+		think_text = "AI Thinking..."
+		txt = FONT.render(think_text, True, (255, 200, 100))
+		text_width = txt.get_width()
+		box_x = (WINDOW_W - text_width) // 2 - 10
+		box_y = TOP_BAR + 10
+		box_w = text_width + 20
+		box_h = 40
+		
+		# Semi-transparent background
+		s = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+		pygame.draw.rect(s, (0, 0, 0, 100), (0, 0, box_w, box_h))
+		pygame.draw.rect(s, (255, 200, 100), (0, 0, box_w, box_h), 2)
+		screen.blit(s, (box_x, box_y))
+		
+		# Draw text
+		screen.blit(txt, (box_x + 10, box_y + 7))
+
+
 # -----------------
 # Main
 # -----------------
@@ -255,7 +291,7 @@ def main():
 	menu_buttons = ()
 	in_top_buttons = []
 	gameover_restart = None
-	global AI_PLAYER, winner, current_player, mode, screen, vs_ai, menu_step, hover_cell
+	global AI_PLAYER, winner, current_player, mode, screen, vs_ai, menu_step, hover_cell, ai_type, ai_thinking
 
 	while True:
 		for event in pygame.event.get():
@@ -280,12 +316,23 @@ def main():
 							menu_step = 'choose_color'
 						elif bx <= mx <= bx + 260 and by + 96 <= my <= by + 96 + 56:
 							vs_ai = True
+							menu_step = 'choose_ai'
+					elif menu_step == 'choose_ai':
+						# choose AI type
+						if bx <= mx <= bx + 260 and by <= my <= by + 56:
+							ai_type = 'random'
+							menu_step = 'choose_color'
+						elif bx <= mx <= bx + 260 and by + 96 <= my <= by + 96 + 56:
+							ai_type = 'alpha_beta'
+							menu_step = 'choose_color'
+						elif bx <= mx <= bx + 260 and by + 192 <= my <= by + 192 + 56:
+							ai_type = 'alpha_beta_plus'
 							menu_step = 'choose_color'
 					else:
 						# choose color then start
 						if bx <= mx <= bx + 260 and by <= my <= by + 56:
 							start_game(1)
-						if bx <= mx <= bx + 260 and by + 96 <= my <= by + 96 + 56:
+						elif bx <= mx <= bx + 260 and by + 96 <= my <= by + 96 + 56:
 							start_game(2)
 
 			elif mode == 'playing':
@@ -341,15 +388,30 @@ def main():
 
 		# AI move handling
 		if mode == 'playing' and game.winner == 0 and AI_PLAYER is not None and game.current_player == AI_PLAYER:
-			move = random_ai.get_move(game.board.grid, game.current_player)
+			ai_thinking = True  # Set flag to show "AI Thinking..."
+			# Render frame to show thinking indicator
+			draw_board()
+			draw_pieces()
+			draw_highlights()
+			draw_ai_thinking()
+			pygame.display.flip()
+			pygame.time.wait(200)  # Wait before AI computation to show indicator
+			
+			# choose AI based on selected type
+			if ai_type == 'alpha_beta':
+				move = alpha_beta_ai.get_move(game.board.grid, game.current_player)
+			elif ai_type == 'alpha_beta_plus':
+				move = alpha_beta_plus_ai.get_move(game.board.grid, game.current_player)
+			else:  # 'random'
+				move = random_ai.get_move(game.board.grid, game.current_player)
+			ai_thinking = False  # Clear flag after AI thinks
 			if move:
 				x, y = move
 				placed, won = game.play_move(x, y)
-				if placed:
-					# clear mouse events which might have accumulated
-					pygame.event.clear(pygame.MOUSEBUTTONDOWN)
-					if won:
-						mode = 'game_over'
+				# clear mouse events which might have accumulated
+				pygame.event.clear(pygame.MOUSEBUTTONDOWN)
+				if won:
+					mode = 'game_over'
 			pygame.time.wait(150)
 
 		# Drawing
@@ -362,11 +424,12 @@ def main():
 			in_top_buttons = draw_top_right()
 			if mode == 'game_over':
 				gameover_restart = draw_game_over()
-
+			else:
+				# Only show AI thinking indicator during gameplay
+				draw_ai_thinking()
 		pygame.display.flip()
 		clock.tick(60)
 
 
 if __name__ == '__main__':
 	main()
-
