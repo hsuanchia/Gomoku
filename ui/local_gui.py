@@ -48,6 +48,15 @@ human_player = 1  # 1=black, 2=white
 AI_PLAYER = 2
 
 
+# menu step for multi-stage menu: 'choose_mode' -> 'choose_color'
+menu_step = 'choose_mode'
+# whether the selected match mode uses AI opponent
+vs_ai = False
+
+# UI transient state
+hover_cell = None
+
+
 # Choose a font that supports CJK characters on Windows fallback list
 def choose_font(names, size):
 	for n in names:
@@ -133,6 +142,31 @@ def draw_pieces():
 				pygame.draw.circle(screen, color, center, max(2, int(CELL_SIZE // 2 - 2)))
 
 
+def draw_highlights():
+	# last move marker
+	if game.last_move:
+		lx, ly = game.last_move
+		center = (int(BOARD_ORIGIN_X + lx * CELL_SIZE), int(BOARD_ORIGIN_Y + ly * CELL_SIZE))
+		r = max(2, int(CELL_SIZE // 2 - 2))
+		pygame.draw.circle(screen, (0, 150, 255), center, r + 6, 3)
+
+	# hover preview (semi-transparent)
+	if hover_cell and mode == 'playing' and game.winner == 0:
+		hx, hy = hover_cell
+		center = (int(BOARD_ORIGIN_X + hx * CELL_SIZE), int(BOARD_ORIGIN_Y + hy * CELL_SIZE))
+		r = max(2, int(CELL_SIZE // 2 - 2))
+		s = pygame.Surface((r * 2 + 8, r * 2 + 8), pygame.SRCALPHA)
+		pygame.draw.circle(s, (0, 255, 0, 120), (r + 4, r + 4), r)
+		screen.blit(s, (center[0] - (r + 4), center[1] - (r + 4)))
+
+	# winning line highlight (if any)
+	if game.win_line:
+		for (wx, wy) in game.win_line:
+			center = (int(BOARD_ORIGIN_X + wx * CELL_SIZE), int(BOARD_ORIGIN_Y + wy * CELL_SIZE))
+			r = max(2, int(CELL_SIZE // 2 - 2))
+			pygame.draw.circle(screen, (255, 60, 60), center, r + 6, 4)
+
+
 def reset_board(starting_player=1):
 	"""Reset core game state and switch to playing mode."""
 	game.reset(starting_player)
@@ -141,10 +175,14 @@ def reset_board(starting_player=1):
 
 
 def start_game(as_player):
-	global human_player, AI_PLAYER
+	global human_player, AI_PLAYER, vs_ai, menu_step
 	human_player = as_player
-	AI_PLAYER = 3 - human_player
+	if vs_ai:
+		AI_PLAYER = 3 - human_player
+	else:
+		AI_PLAYER = None
 	reset_board(starting_player=1)
+	menu_step = 'choose_mode'
 
 
 def draw_menu():
@@ -156,11 +194,18 @@ def draw_menu():
 	b_h = 56
 	bx = (WINDOW_W - b_w) // 2
 	by = 180
-	btn_black = Button((bx, by, b_w, b_h), 'Play as Black (先手)')
-	btn_white = Button((bx, by + 96, b_w, b_h), 'Play as White (後手)')
-	btn_black.draw(screen)
-	btn_white.draw(screen)
-	return btn_black, btn_white
+	if menu_step == 'choose_mode':
+		btn_hvh = Button((bx, by, b_w, b_h), 'Human vs Human')
+		btn_hvai = Button((bx, by + 96, b_w, b_h), 'Human vs AI')
+		btn_hvh.draw(screen)
+		btn_hvai.draw(screen)
+		return btn_hvh, btn_hvai
+	else:
+		btn_black = Button((bx, by, b_w, b_h), 'Play as Black (先手)')
+		btn_white = Button((bx, by + 96, b_w, b_h), 'Play as White (後手)')
+		btn_black.draw(screen)
+		btn_white.draw(screen)
+		return btn_black, btn_white
 
 
 def draw_top_right():
@@ -210,7 +255,7 @@ def main():
 	menu_buttons = ()
 	in_top_buttons = []
 	gameover_restart = None
-	global AI_PLAYER, winner, current_player, mode, screen
+	global AI_PLAYER, winner, current_player, mode, screen, vs_ai, menu_step, hover_cell
 
 	while True:
 		for event in pygame.event.get():
@@ -228,12 +273,30 @@ def main():
 					mx, my = event.pos
 					bx = (WINDOW_W - 260) // 2
 					by = 180
-					if bx <= mx <= bx + 260 and by <= my <= by + 56:
-						start_game(1)
-					if bx <= mx <= bx + 260 and by + 96 <= my <= by + 96 + 56:
-						start_game(2)
+					if menu_step == 'choose_mode':
+						# choose match type
+						if bx <= mx <= bx + 260 and by <= my <= by + 56:
+							vs_ai = False
+							menu_step = 'choose_color'
+						elif bx <= mx <= bx + 260 and by + 96 <= my <= by + 96 + 56:
+							vs_ai = True
+							menu_step = 'choose_color'
+					else:
+						# choose color then start
+						if bx <= mx <= bx + 260 and by <= my <= by + 56:
+							start_game(1)
+						if bx <= mx <= bx + 260 and by + 96 <= my <= by + 96 + 56:
+							start_game(2)
 
 			elif mode == 'playing':
+				if event.type == pygame.MOUSEMOTION:
+					# update hover cell for highlighting
+					hc = get_cell(event.pos)
+					if hc and game.board.grid[hc[1]][hc[0]] == 0:
+						hover_cell = hc
+					else:
+						hover_cell = None
+
 				if event.type == pygame.MOUSEBUTTONDOWN and game.winner == 0:
 					mx, my = event.pos
 					# check top-right buttons first
@@ -243,15 +306,20 @@ def main():
 								reset_board(starting_player=1)
 							elif b.text == 'Menu':
 								mode = 'menu'
+								menu_step = 'choose_mode'
+								vs_ai = False
 							break
 					else:
-						# place piece if human's turn
-						if human_player == game.current_player:
+						# place piece: if AI is disabled both players are human; otherwise only
+						# the configured human_player may place when it's their turn.
+						if AI_PLAYER is None or human_player == game.current_player:
 							cell = get_cell(event.pos)
 							if cell:
 								x, y = cell
 								placed, won = game.play_move(x, y)
 								if placed:
+									# prevent extra mouse events causing multiple placements
+									pygame.event.clear(pygame.MOUSEBUTTONDOWN)
 									if won:
 										mode = 'game_over'
 
@@ -277,8 +345,11 @@ def main():
 			if move:
 				x, y = move
 				placed, won = game.play_move(x, y)
-				if placed and won:
-					mode = 'game_over'
+				if placed:
+					# clear mouse events which might have accumulated
+					pygame.event.clear(pygame.MOUSEBUTTONDOWN)
+					if won:
+						mode = 'game_over'
 			pygame.time.wait(150)
 
 		# Drawing
@@ -287,6 +358,7 @@ def main():
 		else:
 			draw_board()
 			draw_pieces()
+			draw_highlights()
 			in_top_buttons = draw_top_right()
 			if mode == 'game_over':
 				gameover_restart = draw_game_over()

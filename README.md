@@ -17,7 +17,7 @@ gomoku/
 │   └── rule.py         # Win or lose
 │
 ├── players/
-|   └── random.py       # A program that paly with random strategy
+|   └── random.py       # A program that play with random strategy
 │
 ├── ui/
 │   └── local_gui.py    # Pygame local gui
