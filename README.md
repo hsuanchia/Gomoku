@@ -24,3 +24,8 @@ gomoku/
 |
 └── README.md
 ```
+
+# 心得
+> 想說順手試試看AI的寫程式能力(Vibe coding)，結果效果超好= = \
+如果是我來寫的話，估計一個下午才剛刻出一個prototype \
+讚嘆AI，感恩AI (´-ω-)b
