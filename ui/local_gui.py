@@ -2,6 +2,7 @@ import os
 import sys
 import pygame
 from players import random as random_ai
+from core.game import Game
 
 # If running the script directly, add project root to sys.path so sibling
 # packages (like `players`) can be imported.
@@ -34,12 +35,11 @@ BOARD_ORIGIN_Y = TOP_BAR + MARGIN
 screen = pygame.display.set_mode((WINDOW_W, WINDOW_H), pygame.RESIZABLE | pygame.SWSURFACE)
 pygame.display.set_caption("Gomoku")
 
+# clock
 clock = pygame.time.Clock()
 
-# Game state
-board = [[0] * BOARD_SIZE for _ in range(BOARD_SIZE)]
-current_player = 1
-winner = 0
+# Game state (moved to core.game.Game)
+game = Game(BOARD_SIZE)
 mode = 'menu'  # 'menu', 'playing', 'game_over'
 
 # Player settings
@@ -107,22 +107,7 @@ def get_cell(pos):
 	return None
 
 
-def check_win(x, y, player):
-	directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-	for dx, dy in directions:
-		count = 1
-		for d in [1, -1]:
-			nx, ny = x, y
-			while True:
-				nx += dx * d
-				ny += dy * d
-				if 0 <= nx < BOARD_SIZE and 0 <= ny < BOARD_SIZE and board[ny][nx] == player:
-					count += 1
-				else:
-					break
-		if count >= 5:
-			return True
-	return False
+# win detection moved to core.rule.check_win via core.game.Game
 
 
 def draw_board():
@@ -139,19 +124,19 @@ def draw_board():
 
 
 def draw_pieces():
+	grid = game.board.grid
 	for yy in range(BOARD_SIZE):
 		for xx in range(BOARD_SIZE):
-			if board[yy][xx] != 0:
+			if grid[yy][xx] != 0:
 				center = (int(BOARD_ORIGIN_X + xx * CELL_SIZE), int(BOARD_ORIGIN_Y + yy * CELL_SIZE))
-				color = (0, 0, 0) if board[yy][xx] == 1 else (255, 255, 255)
+				color = (0, 0, 0) if grid[yy][xx] == 1 else (255, 255, 255)
 				pygame.draw.circle(screen, color, center, max(2, int(CELL_SIZE // 2 - 2)))
 
 
 def reset_board(starting_player=1):
-	global board, current_player, winner, mode
-	board = [[0] * BOARD_SIZE for _ in range(BOARD_SIZE)]
-	current_player = starting_player
-	winner = 0
+	"""Reset core game state and switch to playing mode."""
+	game.reset(starting_player)
+	global mode
 	mode = 'playing'
 
 
@@ -201,10 +186,10 @@ def draw_game_over():
 	s.fill((0, 0, 0, 140))
 	screen.blit(s, (0, 0))
 	# message
-	if winner == 0:
+	if game.winner == 0:
 		msg = 'Draw'
 	else:
-		if human_player == winner:
+		if human_player == game.winner:
 			msg = 'You win!'
 		else:
 			msg = 'You lose!'
@@ -249,7 +234,7 @@ def main():
 						start_game(2)
 
 			elif mode == 'playing':
-				if event.type == pygame.MOUSEBUTTONDOWN and winner == 0:
+				if event.type == pygame.MOUSEBUTTONDOWN and game.winner == 0:
 					mx, my = event.pos
 					# check top-right buttons first
 					for b in in_top_buttons:
@@ -261,17 +246,14 @@ def main():
 							break
 					else:
 						# place piece if human's turn
-						if human_player == current_player:
+						if human_player == game.current_player:
 							cell = get_cell(event.pos)
 							if cell:
 								x, y = cell
-								if board[y][x] == 0:
-									board[y][x] = current_player
-									if check_win(x, y, current_player):
-										winner = current_player
+								placed, won = game.play_move(x, y)
+								if placed:
+									if won:
 										mode = 'game_over'
-									else:
-										current_player = 3 - current_player
 
 				if event.type == pygame.KEYDOWN:
 					if event.key == pygame.K_a:
@@ -290,16 +272,13 @@ def main():
 						reset_board(starting_player=1)
 
 		# AI move handling
-		if mode == 'playing' and winner == 0 and AI_PLAYER is not None and current_player == AI_PLAYER:
-			move = random_ai.get_move(board, current_player)
+		if mode == 'playing' and game.winner == 0 and AI_PLAYER is not None and game.current_player == AI_PLAYER:
+			move = random_ai.get_move(game.board.grid, game.current_player)
 			if move:
 				x, y = move
-				board[y][x] = current_player
-				if check_win(x, y, current_player):
-					winner = current_player
+				placed, won = game.play_move(x, y)
+				if placed and won:
 					mode = 'game_over'
-				else:
-					current_player = 3 - current_player
 			pygame.time.wait(150)
 
 		# Drawing
